@@ -6,8 +6,8 @@ var AWS = require('aws-sdk');
 var piexif = require('piexifjs');
 
 var DST_BUCKET = process.env.DESTINATION_BUCKET;
-var MAX_WIDTH = process.env.MAX_WIDTH;
-var MAX_HEIGHT = process.env.MAX_HEIGHT;
+var MAX_WIDTH = parseInt(process.env.MAX_WIDTH);
+var MAX_HEIGHT = parseInt(process.env.MAX_HEIGHT);
 
 var s3 = new AWS.S3();
 
@@ -52,16 +52,12 @@ exports.handler = function(event, context, callback) {
             function transform(response, next) {
                 console.log('transforming ' + srcKey + '...');
                 var inputBuffer = response.Body;
-                // Infer the scaling factor to avoid stretching the image unnaturally.
-                var scalingFactor = Math.min(
-                    MAX_WIDTH / size.width,
-                    MAX_HEIGHT / size.height
-                );
-                var width = scalingFactor * size.width;
-                var height = scalingFactor * size.height;
+                console.log(inputBuffer);
 
                 var transformedImg = sharp(inputBuffer)
-                    .resize(width, height)
+                    .resize(MAX_WIDTH, MAX_HEIGHT)
+                    .max()
+                    .withoutEnlargement()
                     .overlayWith('hip-logo-bw-transparent.png', {
                         gravity: sharp.gravity.southeast
                     });
@@ -83,7 +79,7 @@ exports.handler = function(event, context, callback) {
                 var exifObj = piexif.load(jpegData);
                 console.log(exifObj);
                 exifObj['0th'][piexif.ImageIFD.Copyright] =
-                    'Copyright (c) 2017 Will Seippel';
+                    'Copyright (c) 2018 Will Seippel';
                 console.log(exifObj);
                 var exifBytes = piexif.dump(exifObj);
                 var newData = piexif.insert(exifBytes, jpegData);

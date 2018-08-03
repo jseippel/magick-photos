@@ -1,5 +1,6 @@
 var async = require('async');
-var gm = require('gm').subClass({ imageMagick: true }); // Enable ImageMagick integration.
+// var gm = require('gm').subClass({ imageMagick: true }); // Enable ImageMagick integration.
+var sharp = require('sharp');
 var util = require('util');
 var AWS = require('aws-sdk');
 var piexif = require('piexifjs');
@@ -50,32 +51,28 @@ exports.handler = function(event, context, callback) {
             },
             function transform(response, next) {
                 console.log('transforming ' + srcKey + '...');
-                gm(response.Body).size(function(err, size) {
-                    console.log(response.Body);
-                    console.log(size);
-                    // Infer the scaling factor to avoid stretching the image unnaturally.
-                    var scalingFactor = Math.min(
-                        MAX_WIDTH / size.width,
-                        MAX_HEIGHT / size.height
-                    );
-                    var width = scalingFactor * size.width;
-                    var height = scalingFactor * size.height;
+                var inputBuffer = response.Body;
+                // Infer the scaling factor to avoid stretching the image unnaturally.
+                var scalingFactor = Math.min(
+                    MAX_WIDTH / size.width,
+                    MAX_HEIGHT / size.height
+                );
+                var width = scalingFactor * size.width;
+                var height = scalingFactor * size.height;
 
-                    // Transform the image buffer in memory.
-                    console.log('resizing... ' + width + ' x ' + height);
-                    this.resize(width, height);
-                    console.log('watermarking...');
-                    this.draw([
-                        'gravity SouthEast image Over 128,128 512,512 "hip-logo-bw-transparent.png"'
-                    ]);
-                    console.log('to buffer... ' + imageType);
-                    this.toBuffer(imageType, function(err, buffer) {
-                        if (err) {
-                            next(err);
-                        } else {
-                            next(null, response.ContentType, buffer);
-                        }
+                var transformedImg = sharp(inputBuffer)
+                    .resize(width, height)
+                    .overlayWith('hip-logo-bw-transparent.png', {
+                        gravity: sharp.gravity.southeast
                     });
+
+                console.log('to buffer... ' + imageType);
+                transformedImg.toBuffer(imageType, function(err, buffer) {
+                    if (err) {
+                        next(err);
+                    } else {
+                        next(null, response.ContentType, buffer);
+                    }
                 });
             },
             function copyright(contentType, data, next) {
